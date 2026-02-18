@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, NotRequired, TypedDict
+from typing import NotRequired, TypedDict
 
 
 # ── Response types ────────────────────────────────────────────
@@ -121,7 +121,7 @@ class InboxEmails(TypedDict):
 class EmailList(TypedDict):
     emails: NotRequired[list[Email]]
     data: NotRequired[list[Email]]
-    meta: NotRequired[dict[str, Any]]
+    meta: NotRequired[dict[str, object]]
 
 
 class DraftCollection(TypedDict):
@@ -136,7 +136,7 @@ class MailboxLabelList(TypedDict):
 
 class EmailThreadList(TypedDict):
     data: NotRequired[list[EmailThread]]
-    meta: NotRequired[dict[str, Any]]
+    meta: NotRequired[dict[str, object]]
 
 
 class EmailSendResponse(TypedDict):
@@ -207,6 +207,11 @@ class WebhookSubscriptionPayload(TypedDict, total=False):
 
 class WebhookSubscriptionInput(TypedDict):
     webhook_subscription: WebhookSubscriptionPayload
+
+
+class NotificationTokenInput(TypedDict, total=False):
+    token: str
+    platform: str
 
 
 class PasswordCredentials(TypedDict):

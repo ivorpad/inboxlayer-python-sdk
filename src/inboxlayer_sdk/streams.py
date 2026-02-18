@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Iterator
+from typing import AsyncIterator, Iterator
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,7 @@ class SSEEvent:
     retry: int | None = None
     raw: str | None = None
 
-    def json(self) -> Any | None:
+    def json(self) -> object:
         """Attempt to parse event data as JSON."""
         try:
             return json.loads(self.data) if self.data else None

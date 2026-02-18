@@ -11,7 +11,7 @@ pip install inboxlayer-python-sdk
 ## Quick start
 
 ```python
-from inboxlayer_sdk import AsyncInboxLayerClient, InboxLayerClient
+from inboxlayer_sdk import InboxLayerClient
 
 client = InboxLayerClient(api_token="...")  # sync
 
@@ -32,10 +32,18 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+All responses are plain dicts (typed as `TypedDict`), so use bracket access:
+
+```python
+auth = client.authenticate(email="user@example.com", password="secret")
+print(auth["token"])
+```
+
 ## Client initialization
 
 - `InboxLayerClient(api_token=None, allow_http=False, ...)` for synchronous calls.
 - `AsyncInboxLayerClient(...)` for asynchronous calls.
+- Default base URL is `https://inboxlayer.dev`.
 - `allow_http=True` is required when calling local servers over `http://`.
 - `authenticate()` can be used without an initial token; it stores the returned token on the client automatically.
 
@@ -44,7 +52,7 @@ from inboxlayer_sdk import InboxLayerClient
 
 client = InboxLayerClient(base_url="http://localhost:3033", allow_http=True)
 auth = client.authenticate(email="user@example.com", password="secret")
-print(auth.token)
+print(auth["token"])
 ```
 
 `post_auth` is a convenience alias for `authenticate`.
@@ -63,99 +71,99 @@ Both `InboxLayerClient` and `AsyncInboxLayerClient` expose the same public metho
 
 ### Auth
 
-- `authenticate(email: str | None = None, password: str | None = None, options: RequestOptions | None = None) -> AuthResponse`
-- `post_auth(email: str, password: str, options: RequestOptions | None = None) -> AuthResponse`
-- `delete_auth(options: RequestOptions | None = None) -> SuccessResponse`
-- `logout(options: RequestOptions | None = None) -> SuccessResponse`
+- `authenticate(email, password, *, options) -> AuthResponse`
+- `post_auth(email, password, *, options) -> AuthResponse`
+- `delete_auth(*, options) -> SuccessResponse`
+- `logout(*, options) -> SuccessResponse`
 
 ### Account and session context
 
-- `get_me(options: RequestOptions | None = None) -> User`
+- `get_me(*, options) -> User`
 
 ### Password
 
-- `patch_password(body: Mapping[str, Any] | PasswordInput | None = None, options: RequestOptions | None = None) -> SuccessResponse`
-- `put_password(body: Mapping[str, Any] | PasswordInput | None = None, options: RequestOptions | None = None) -> SuccessResponse`
-- `replace_password(body: Mapping[str, Any] | PasswordInput | None = None, options: RequestOptions | None = None) -> SuccessResponse`
+- `patch_password(body: PasswordInput | PasswordCredentials | None, *, options) -> SuccessResponse`
+- `put_password(body: PasswordInput | PasswordCredentials | None, *, options) -> SuccessResponse`
+- `replace_password(body: PasswordInput | PasswordCredentials | None, *, options) -> SuccessResponse`
 
 ### Accounts
 
-- `list_accounts(options: RequestOptions | None = None) -> list[Account]`
+- `list_accounts(*, options) -> list[Account]`
 
 ### Inboxes
 
-- `list_inboxes(cursor: str | None = None, per_page: int | None = None, options: RequestOptions | None = None) -> InboxList`
-- `create_inbox(payload: InboxCreate | Mapping[str, Any], options: RequestOptions | None = None) -> Inbox`
-- `get_inbox(inbox_id: str, cursor: str | None = None, labels: str | None = None, options: RequestOptions | None = None) -> InboxEmails`
-- `delete_inbox(inbox_id: str, options: RequestOptions | None = None) -> None`
-- `warmup_inbox(inbox_id: str, options: RequestOptions | None = None) -> WarmupStatus`
-- `stream_inbox_events(inbox_id: str, timeout: int | None = None, since: str | datetime | None = None, options: RequestOptions | None = None) -> Iterator[SSEEvent] | AsyncIterator[SSEEvent]`
+- `list_inboxes(*, cursor, per_page, options) -> InboxList`
+- `create_inbox(payload: InboxCreate, *, options) -> Inbox`
+- `get_inbox(inbox_id, *, cursor, labels, options) -> InboxEmails`
+- `delete_inbox(inbox_id, *, options) -> None`
+- `warmup_inbox(inbox_id, *, options) -> WarmupStatus`
+- `stream_inbox_events(inbox_id, *, timeout, since, options) -> Iterator[SSEEvent] | AsyncIterator[SSEEvent]`
 
 ### Drafts
 
-- `list_inbox_drafts(inbox_id: str, options: RequestOptions | None = None) -> DraftCollection`
-- `create_inbox_draft(inbox_id: str, payload: DraftInput | Mapping[str, Any], options: RequestOptions | None = None) -> Draft`
-- `get_inbox_draft(inbox_id: str, draft_id: str, options: RequestOptions | None = None) -> Draft`
-- `update_inbox_draft(inbox_id: str, draft_id: str, payload: DraftInput | Mapping[str, Any], options: RequestOptions | None = None) -> Draft`
-- `replace_inbox_draft(inbox_id: str, draft_id: str, payload: DraftInput | Mapping[str, Any], options: RequestOptions | None = None) -> Draft`
-- `delete_inbox_draft(inbox_id: str, draft_id: str, options: RequestOptions | None = None) -> None`
-- `send_inbox_draft(inbox_id: str, draft_id: str, options: RequestOptions | None = None) -> SendResult`
-- `list_drafts(options: RequestOptions | None = None) -> DraftCollection`
-- `create_draft(payload: DraftInput | Mapping[str, Any], options: RequestOptions | None = None) -> Draft`
-- `get_draft(draft_id: str, options: RequestOptions | None = None) -> Draft`
-- `update_draft(draft_id: str, payload: DraftInput | Mapping[str, Any], options: RequestOptions | None = None) -> Draft`
-- `replace_draft(draft_id: str, payload: DraftInput | Mapping[str, Any], options: RequestOptions | None = None) -> Draft`
-- `delete_draft(draft_id: str, options: RequestOptions | None = None) -> None`
-- `send_draft(draft_id: str, options: RequestOptions | None = None) -> SendResult`
+- `list_inbox_drafts(inbox_id, *, options) -> DraftCollection`
+- `create_inbox_draft(inbox_id, payload: DraftInput, *, options) -> Draft`
+- `get_inbox_draft(inbox_id, draft_id, *, options) -> Draft`
+- `update_inbox_draft(inbox_id, draft_id, payload: DraftInput, *, options) -> Draft`
+- `replace_inbox_draft(inbox_id, draft_id, payload: DraftInput, *, options) -> Draft`
+- `delete_inbox_draft(inbox_id, draft_id, *, options) -> None`
+- `send_inbox_draft(inbox_id, draft_id, *, options) -> SendResult`
+- `list_drafts(*, options) -> DraftCollection`
+- `create_draft(payload: DraftInput, *, options) -> Draft`
+- `get_draft(draft_id, *, options) -> Draft`
+- `update_draft(draft_id, payload: DraftInput, *, options) -> Draft`
+- `replace_draft(draft_id, payload: DraftInput, *, options) -> Draft`
+- `delete_draft(draft_id, *, options) -> None`
+- `send_draft(draft_id, *, options) -> SendResult`
 
 ### Emails
 
-- `list_emails(inbox: str | None = None, cursor: str | None = None, options: RequestOptions | None = None) -> EmailList`
-- `create_email(payload: EmailSendInput | Mapping[str, Any], options: RequestOptions | None = None) -> EmailSendResponse`
-- `patch_email(email_id: str, payload: EmailLabelPatch | Mapping[str, Any], options: RequestOptions | None = None) -> Email`
-- `put_email(email_id: str, payload: EmailLabelPatch | Mapping[str, Any], options: RequestOptions | None = None) -> Email`
-- `apply_email_actions(email_id: str, action: EmailActionInput | EmailLabelPatch | Mapping[str, Any], options: RequestOptions | None = None) -> Email`
-- `reply_email(email_id: str, payload: Mapping[str, Any] | EmailSendInput, options: RequestOptions | None = None) -> SendResult`
-- `forward_email(email_id: str, payload: Mapping[str, Any] | EmailSendInput, options: RequestOptions | None = None) -> SendResult`
-- `send_email(payload: Mapping[str, Any] | EmailSendInput, options: RequestOptions | None = None) -> SendResult`
-- `search_emails(q: str, options: RequestOptions | None = None) -> EmailList`
+- `list_emails(*, inbox, cursor, options) -> EmailList`
+- `create_email(payload: EmailSendInput, *, options) -> EmailSendResponse`
+- `patch_email(email_id, payload: EmailLabelPatch, *, options) -> Email`
+- `put_email(email_id, payload: EmailLabelPatch, *, options) -> Email`
+- `apply_email_actions(email_id, action: EmailActionInput | EmailLabelPatch, *, options) -> Email`
+- `reply_email(email_id, payload: EmailSendInput, *, options) -> SendResult`
+- `forward_email(email_id, payload: EmailSendInput, *, options) -> SendResult`
+- `send_email(payload: EmailSendInput, *, options) -> SendResult`
+- `search_emails(q, *, options) -> EmailList`
 
 ### Mailbox labels
 
-- `list_mailbox_labels(options: RequestOptions | None = None) -> MailboxLabelList`
-- `create_mailbox_label(payload: MailboxLabelInput | Mapping[str, Any], options: RequestOptions | None = None) -> MailboxLabel`
-- `update_mailbox_label(mailbox_label_id: str, payload: MailboxLabelInput | Mapping[str, Any], options: RequestOptions | None = None) -> MailboxLabel`
-- `replace_mailbox_label(mailbox_label_id: str, payload: MailboxLabelInput | Mapping[str, Any], options: RequestOptions | None = None) -> MailboxLabel`
-- `delete_mailbox_label(mailbox_label_id: str, options: RequestOptions | None = None) -> None`
+- `list_mailbox_labels(*, options) -> MailboxLabelList`
+- `create_mailbox_label(payload: MailboxLabelInput, *, options) -> MailboxLabel`
+- `update_mailbox_label(mailbox_label_id, payload: MailboxLabelInput, *, options) -> MailboxLabel`
+- `replace_mailbox_label(mailbox_label_id, payload: MailboxLabelInput, *, options) -> MailboxLabel`
+- `delete_mailbox_label(mailbox_label_id, *, options) -> None`
 
 ### Utilities and integration
 
-- `create_notification_token(payload: Mapping[str, Any], options: RequestOptions | None = None) -> dict[str, Any]`
+- `create_notification_token(payload: NotificationTokenInput, *, options) -> SuccessResponse`
 
 ### Custom domains
 
-- `list_custom_domains(options: RequestOptions | None = None) -> list[CustomDomain]`
-- `create_custom_domain(payload: CustomDomainInput | Mapping[str, Any], options: RequestOptions | None = None) -> CustomDomain`
-- `get_custom_domain(domain_id: str, options: RequestOptions | None = None) -> CustomDomain`
-- `update_custom_domain(domain_id: str, payload: CustomDomainInput | Mapping[str, Any], options: RequestOptions | None = None) -> CustomDomain`
-- `replace_custom_domain(domain_id: str, payload: CustomDomainInput | Mapping[str, Any], options: RequestOptions | None = None) -> CustomDomain`
-- `delete_custom_domain(domain_id: str, options: RequestOptions | None = None) -> None`
-- `verify_custom_domain(domain_id: str, options: RequestOptions | None = None) -> dict[str, Any]`
+- `list_custom_domains(*, options) -> list[CustomDomain]`
+- `create_custom_domain(payload: CustomDomainInput | CustomDomainPayload, *, options) -> CustomDomain`
+- `get_custom_domain(domain_id, *, options) -> CustomDomain`
+- `update_custom_domain(domain_id, payload: CustomDomainInput | CustomDomainPayload, *, options) -> CustomDomain`
+- `replace_custom_domain(domain_id, payload: CustomDomainInput | CustomDomainPayload, *, options) -> CustomDomain`
+- `delete_custom_domain(domain_id, *, options) -> None`
+- `verify_custom_domain(domain_id, *, options) -> CustomDomain`
 
 ### Webhooks
 
-- `list_webhook_subscriptions(options: RequestOptions | None = None) -> list[WebhookSubscription]`
-- `create_webhook_subscription(payload: WebhookSubscriptionInput | Mapping[str, Any], options: RequestOptions | None = None) -> WebhookSubscription`
-- `get_webhook_subscription(webhook_id: str, options: RequestOptions | None = None) -> WebhookSubscription`
-- `update_webhook_subscription(webhook_id: str, payload: WebhookSubscriptionInput | Mapping[str, Any], options: RequestOptions | None = None) -> WebhookSubscription`
-- `replace_webhook_subscription(webhook_id: str, payload: WebhookSubscriptionInput | Mapping[str, Any], options: RequestOptions | None = None) -> WebhookSubscription`
-- `delete_webhook_subscription(webhook_id: str, options: RequestOptions | None = None) -> None`
-- `test_webhook_subscription(webhook_id: str, options: RequestOptions | None = None) -> SuccessResponse`
+- `list_webhook_subscriptions(*, options) -> list[WebhookSubscription]`
+- `create_webhook_subscription(payload: WebhookSubscriptionInput | WebhookSubscriptionPayload, *, options) -> WebhookSubscription`
+- `get_webhook_subscription(webhook_id, *, options) -> WebhookSubscription`
+- `update_webhook_subscription(webhook_id, payload: WebhookSubscriptionInput | WebhookSubscriptionPayload, *, options) -> WebhookSubscription`
+- `replace_webhook_subscription(webhook_id, payload: WebhookSubscriptionInput | WebhookSubscriptionPayload, *, options) -> WebhookSubscription`
+- `delete_webhook_subscription(webhook_id, *, options) -> None`
+- `test_webhook_subscription(webhook_id, *, options) -> SuccessResponse`
 
 ### Thread endpoints
 
-- `list_threads(options: RequestOptions | None = None) -> EmailThreadList`
-- `get_email_thread(thread_id: str, options: RequestOptions | None = None) -> EmailThread`
+- `list_threads(*, options) -> EmailThreadList`
+- `get_email_thread(thread_id, *, options) -> EmailThread`
 
 ### Client-level helpers
 

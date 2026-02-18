@@ -8,7 +8,7 @@ import random
 import time
 from datetime import datetime
 from types import MappingProxyType
-from typing import Any, AsyncIterator, Iterator, Mapping, Sequence, cast
+from typing import AsyncIterator, Iterator, Mapping, Sequence, cast
 
 import httpx
 
@@ -26,6 +26,7 @@ from .models import (
     AuthResponse,
     CustomDomain,
     CustomDomainInput,
+    CustomDomainPayload,
     Draft,
     DraftCollection,
     DraftInput,
@@ -44,6 +45,8 @@ from .models import (
     MailboxLabel,
     MailboxLabelInput,
     MailboxLabelList,
+    NotificationTokenInput,
+    PasswordCredentials,
     PasswordInput,
     SendResult,
     SuccessResponse,
@@ -51,17 +54,18 @@ from .models import (
     WarmupStatus,
     WebhookSubscription,
     WebhookSubscriptionInput,
+    WebhookSubscriptionPayload,
 )
 from .request_options import RequestOptions
 from .security import parse_retry_after, validate_base_url
 from .streams import SSEEvent, parse_sse_lines, parse_sse_lines_async
 
 
-def _is_datetime(value: Any) -> bool:
+def _is_datetime(value: object) -> bool:
     return isinstance(value, (datetime,))
 
 
-def _coerce_datetime(value: Any) -> str | None:
+def _coerce_datetime(value: object) -> str | None:
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -69,7 +73,7 @@ def _coerce_datetime(value: Any) -> str | None:
     return str(value)
 
 
-def _coerce_json_payload(payload: Any) -> Any:
+def _coerce_json_payload(payload: object) -> object:
     if payload is None:
         return None
     if isinstance(payload, Mapping):
@@ -77,7 +81,7 @@ def _coerce_json_payload(payload: Any) -> Any:
     return payload
 
 
-def _coerce_wrapper_payload(payload: Any, wrapper_key: str) -> Any:
+def _coerce_wrapper_payload(payload: object, wrapper_key: str) -> object:
     if payload is None:
         return None
 
@@ -88,7 +92,7 @@ def _coerce_wrapper_payload(payload: Any, wrapper_key: str) -> Any:
     return payload
 
 
-def _coerce_password_payload(payload: Any) -> Any:
+def _coerce_password_payload(payload: object) -> object:
     if payload is None:
         raise InboxLayerValidationError("password update body is required")
 
@@ -110,10 +114,10 @@ def _coerce_password_payload(payload: Any) -> Any:
     return {"user": payload}
 
 
-def _coerce_query_params(query: Mapping[str, Any] | None) -> dict[str, Any] | None:
+def _coerce_query_params(query: Mapping[str, object] | None) -> dict[str, object] | None:
     if query is None:
         return None
-    normalized: dict[str, Any] = {}
+    normalized: dict[str, object] = {}
     for key, value in query.items():
         if value is None:
             continue
@@ -224,7 +228,7 @@ class _BaseInboxLayerClient:
             raise InboxLayerValidationError("max_retries must be non-negative")
         return int(max_retries)
 
-    def _merge_query(self, request_options: RequestOptions, query: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    def _merge_query(self, request_options: RequestOptions, query: Mapping[str, object] | None) -> dict[str, object] | None:
         merged = {}
         for source in (request_options.query, query):
             if source is None:
@@ -291,7 +295,7 @@ class _BaseInboxLayerClient:
             raise InboxLayerHTTPError(message, **kwargs)
         raise InboxLayerHTTPError(message, **kwargs)
 
-    def _parse_response(self, response: httpx.Response) -> Any:
+    def _parse_response(self, response: httpx.Response) -> object:
         if response.status_code == 204:
             return None
         content_type = response.headers.get("content-type", "")
@@ -344,12 +348,12 @@ class InboxLayerClient(_BaseInboxLayerClient):
         method: str,
         path: str,
         *,
-        query: Mapping[str, Any] | None = None,
-        json_data: Any | None = None,
+        query: Mapping[str, object] | None = None,
+        json_data: object = None,
         options: RequestOptions | None = None,
         stream: bool = False,
         idempotency_key: str | None = None,
-    ) -> Any:
+    ) -> object:
         request_options = self._request_options(options)
         path = self._path(path)
         method = method.upper()
@@ -467,19 +471,19 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def get_me(self, *, options: RequestOptions | None = None) -> User:
         return self.request("GET", "/api/v1/me", options=options)
 
-    def patch_password(self, body: Mapping[str, Any] | PasswordInput | None = None, *, options: RequestOptions | None = None) -> SuccessResponse:
+    def patch_password(self, body: PasswordInput | PasswordCredentials | None = None, *, options: RequestOptions | None = None) -> SuccessResponse:
         return self._simple_password_change("PATCH", body, options=options)
 
-    def put_password(self, body: Mapping[str, Any] | PasswordInput | None = None, *, options: RequestOptions | None = None) -> SuccessResponse:
+    def put_password(self, body: PasswordInput | PasswordCredentials | None = None, *, options: RequestOptions | None = None) -> SuccessResponse:
         return self._simple_password_change("PUT", body, options=options)
 
-    def replace_password(self, body: Mapping[str, Any] | PasswordInput | None = None, *, options: RequestOptions | None = None) -> SuccessResponse:
+    def replace_password(self, body: PasswordInput | PasswordCredentials | None = None, *, options: RequestOptions | None = None) -> SuccessResponse:
         return self.put_password(body=body, options=options)
 
     def _simple_password_change(
         self,
         method: str,
-        body: Mapping[str, Any] | PasswordInput | None = None,
+        body: PasswordInput | PasswordCredentials | None = None,
         *,
         options: RequestOptions | None = None,
     ) -> SuccessResponse:
@@ -503,7 +507,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
             options=options,
         )
 
-    def create_inbox(self, payload: InboxCreate | Mapping[str, Any], *, options: RequestOptions | None = None) -> Inbox:
+    def create_inbox(self, payload: InboxCreate, *, options: RequestOptions | None = None) -> Inbox:
         return cast(Inbox, self.request("POST", "/api/v1/inboxes", json_data=payload, options=options))
 
     def get_inbox(self, inbox_id: str, *, cursor: str | None = None, labels: str | None = None, options: RequestOptions | None = None) -> InboxEmails:
@@ -544,7 +548,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def create_inbox_draft(
         self,
         inbox_id: str,
-        payload: DraftInput | Mapping[str, Any],
+        payload: DraftInput,
         *,
         options: RequestOptions | None = None,
     ) -> Draft:
@@ -572,7 +576,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
         self,
         inbox_id: str,
         draft_id: str,
-        payload: DraftInput | Mapping[str, Any],
+        payload: DraftInput,
         *,
         options: RequestOptions | None = None,
     ) -> Draft:
@@ -587,7 +591,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
         self,
         inbox_id: str,
         draft_id: str,
-        payload: DraftInput | Mapping[str, Any],
+        payload: DraftInput,
         *,
         options: RequestOptions | None = None,
     ) -> Draft:
@@ -602,7 +606,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
         self,
         method: str,
         path: str,
-        payload: DraftInput | Mapping[str, Any],
+        payload: DraftInput,
         *,
         options: RequestOptions | None = None,
     ) -> Draft:
@@ -626,7 +630,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
 
     def create_draft(
         self,
-        payload: DraftInput | Mapping[str, Any],
+        payload: DraftInput,
         *,
         options: RequestOptions | None = None,
     ) -> Draft:
@@ -638,7 +642,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def update_draft(
         self,
         draft_id: str,
-        payload: DraftInput | Mapping[str, Any],
+        payload: DraftInput,
         *,
         options: RequestOptions | None = None,
     ) -> Draft:
@@ -652,7 +656,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def replace_draft(
         self,
         draft_id: str,
-        payload: DraftInput | Mapping[str, Any],
+        payload: DraftInput,
         *,
         options: RequestOptions | None = None,
     ) -> Draft:
@@ -689,19 +693,19 @@ class InboxLayerClient(_BaseInboxLayerClient):
             ),
         )
 
-    def create_email(self, payload: EmailSendInput | Mapping[str, Any], *, options: RequestOptions | None = None) -> EmailSendResponse:
+    def create_email(self, payload: EmailSendInput, *, options: RequestOptions | None = None) -> EmailSendResponse:
         return cast(EmailSendResponse, self.request("POST", "/api/v1/emails", json_data=payload, options=options))
 
-    def patch_email(self, email_id: str, payload: EmailLabelPatch | Mapping[str, Any], *, options: RequestOptions | None = None) -> Email:
+    def patch_email(self, email_id: str, payload: EmailLabelPatch, *, options: RequestOptions | None = None) -> Email:
         return cast(Email, self.request("PATCH", f"/api/v1/emails/{email_id}", json_data=payload, options=options))
 
-    def put_email(self, email_id: str, payload: EmailLabelPatch | Mapping[str, Any], *, options: RequestOptions | None = None) -> Email:
+    def put_email(self, email_id: str, payload: EmailLabelPatch, *, options: RequestOptions | None = None) -> Email:
         return cast(Email, self.request("PUT", f"/api/v1/emails/{email_id}", json_data=payload, options=options))
 
     def apply_email_actions(
         self,
         email_id: str,
-        action: EmailActionInput | EmailLabelPatch | Mapping[str, Any],
+        action: EmailActionInput | EmailLabelPatch,
         *,
         options: RequestOptions | None = None,
     ) -> Email:
@@ -713,7 +717,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def reply_email(
         self,
         email_id: str,
-        payload: Mapping[str, Any] | EmailSendInput,
+        payload: EmailSendInput,
         *,
         options: RequestOptions | None = None,
     ) -> SendResult:
@@ -725,7 +729,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def forward_email(
         self,
         email_id: str,
-        payload: Mapping[str, Any] | EmailSendInput,
+        payload: EmailSendInput,
         *,
         options: RequestOptions | None = None,
     ) -> SendResult:
@@ -734,7 +738,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
             self.request("POST", f"/api/v1/emails/{email_id}/forward", json_data=payload, options=options),
         )
 
-    def send_email(self, payload: Mapping[str, Any] | EmailSendInput, *, options: RequestOptions | None = None) -> SendResult:
+    def send_email(self, payload: EmailSendInput, *, options: RequestOptions | None = None) -> SendResult:
         return cast(SendResult, self.request("POST", "/api/v1/emails/send", json_data=payload, options=options))
 
     def search_emails(self, q: str, *, options: RequestOptions | None = None) -> EmailList:
@@ -746,7 +750,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def list_mailbox_labels(self, *, options: RequestOptions | None = None) -> MailboxLabelList:
         return cast(MailboxLabelList, self.request("GET", "/api/v1/mailbox_labels", options=options))
 
-    def create_mailbox_label(self, payload: MailboxLabelInput | Mapping[str, Any], *, options: RequestOptions | None = None) -> MailboxLabel:
+    def create_mailbox_label(self, payload: MailboxLabelInput, *, options: RequestOptions | None = None) -> MailboxLabel:
         return cast(
             MailboxLabel,
             self.request("POST", "/api/v1/mailbox_labels", json_data=payload, options=options),
@@ -755,7 +759,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def update_mailbox_label(
         self,
         mailbox_label_id: str,
-        payload: MailboxLabelInput | Mapping[str, Any],
+        payload: MailboxLabelInput,
         *,
         options: RequestOptions | None = None,
     ) -> MailboxLabel:
@@ -767,7 +771,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def replace_mailbox_label(
         self,
         mailbox_label_id: str,
-        payload: MailboxLabelInput | Mapping[str, Any],
+        payload: MailboxLabelInput,
         *,
         options: RequestOptions | None = None,
     ) -> MailboxLabel:
@@ -779,13 +783,13 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def delete_mailbox_label(self, mailbox_label_id: str, *, options: RequestOptions | None = None) -> None:
         return cast(None, self.request("DELETE", f"/api/v1/mailbox_labels/{mailbox_label_id}", options=options))
 
-    def create_notification_token(self, payload: Mapping[str, Any], *, options: RequestOptions | None = None) -> dict[str, Any]:
-        return cast(dict[str, Any], self.request("POST", "/api/v1/notification_tokens", json_data=payload, options=options))
+    def create_notification_token(self, payload: NotificationTokenInput, *, options: RequestOptions | None = None) -> SuccessResponse:
+        return cast(SuccessResponse, self.request("POST", "/api/v1/notification_tokens", json_data=payload, options=options))
 
     def list_custom_domains(self, *, options: RequestOptions | None = None) -> list[CustomDomain]:
         return self.request("GET", "/api/v1/custom_domains", options=options)
 
-    def create_custom_domain(self, payload: CustomDomainInput | Mapping[str, Any], *, options: RequestOptions | None = None) -> CustomDomain:
+    def create_custom_domain(self, payload: CustomDomainInput | CustomDomainPayload, *, options: RequestOptions | None = None) -> CustomDomain:
         payload = _coerce_wrapper_payload(payload, "custom_domain")
         return cast(
             CustomDomain,
@@ -801,7 +805,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def update_custom_domain(
         self,
         domain_id: str,
-        payload: CustomDomainInput | Mapping[str, Any],
+        payload: CustomDomainInput | CustomDomainPayload,
         *,
         options: RequestOptions | None = None,
     ) -> CustomDomain:
@@ -816,7 +820,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def replace_custom_domain(
         self,
         domain_id: str,
-        payload: CustomDomainInput | Mapping[str, Any],
+        payload: CustomDomainInput | CustomDomainPayload,
         *,
         options: RequestOptions | None = None,
     ) -> CustomDomain:
@@ -832,7 +836,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
         self,
         method: str,
         path: str,
-        payload: CustomDomainInput | Mapping[str, Any],
+        payload: CustomDomainInput | CustomDomainPayload,
         *,
         options: RequestOptions | None = None,
     ) -> CustomDomain:
@@ -844,9 +848,9 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def delete_custom_domain(self, domain_id: str, *, options: RequestOptions | None = None) -> None:
         return cast(None, self.request("DELETE", f"/api/v1/custom_domains/{domain_id}", options=options))
 
-    def verify_custom_domain(self, domain_id: str, *, options: RequestOptions | None = None) -> dict[str, Any]:
+    def verify_custom_domain(self, domain_id: str, *, options: RequestOptions | None = None) -> CustomDomain:
         return cast(
-            dict[str, Any],
+            CustomDomain,
             self.request("POST", f"/api/v1/custom_domains/{domain_id}/verify", options=options),
         )
 
@@ -859,7 +863,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
 
     def create_webhook_subscription(
         self,
-        payload: WebhookSubscriptionInput | Mapping[str, Any],
+        payload: WebhookSubscriptionInput | WebhookSubscriptionPayload,
         *,
         options: RequestOptions | None = None,
     ) -> WebhookSubscription:
@@ -882,7 +886,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def update_webhook_subscription(
         self,
         webhook_id: str,
-        payload: WebhookSubscriptionInput | Mapping[str, Any],
+        payload: WebhookSubscriptionInput | WebhookSubscriptionPayload,
         *,
         options: RequestOptions | None = None,
     ) -> WebhookSubscription:
@@ -897,7 +901,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
     def replace_webhook_subscription(
         self,
         webhook_id: str,
-        payload: WebhookSubscriptionInput | Mapping[str, Any],
+        payload: WebhookSubscriptionInput | WebhookSubscriptionPayload,
         *,
         options: RequestOptions | None = None,
     ) -> WebhookSubscription:
@@ -913,7 +917,7 @@ class InboxLayerClient(_BaseInboxLayerClient):
         self,
         method: str,
         path: str,
-        payload: WebhookSubscriptionInput | Mapping[str, Any],
+        payload: WebhookSubscriptionInput | WebhookSubscriptionPayload,
         *,
         options: RequestOptions | None = None,
     ) -> WebhookSubscription:
@@ -984,11 +988,11 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
         method: str,
         path: str,
         *,
-        query: Mapping[str, Any] | None = None,
-        json_data: Any | None = None,
+        query: Mapping[str, object] | None = None,
+        json_data: object = None,
         options: RequestOptions | None = None,
         stream: bool = False,
-    ) -> Any:
+    ) -> object:
         request_options = self._request_options(options)
         path = self._path(path)
         method = method.upper()
@@ -1105,19 +1109,19 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
     async def get_me(self, *, options: RequestOptions | None = None) -> User:
         return cast(User, await self.request("GET", "/api/v1/me", options=options))
 
-    async def patch_password(self, body: Mapping[str, Any] | PasswordInput | None = None, *, options: RequestOptions | None = None) -> SuccessResponse:
+    async def patch_password(self, body: PasswordInput | PasswordCredentials | None = None, *, options: RequestOptions | None = None) -> SuccessResponse:
         return await self._simple_password_change("PATCH", body, options=options)
 
-    async def put_password(self, body: Mapping[str, Any] | PasswordInput | None = None, *, options: RequestOptions | None = None) -> SuccessResponse:
+    async def put_password(self, body: PasswordInput | PasswordCredentials | None = None, *, options: RequestOptions | None = None) -> SuccessResponse:
         return await self._simple_password_change("PUT", body, options=options)
 
-    async def replace_password(self, body: Mapping[str, Any] | PasswordInput | None = None, *, options: RequestOptions | None = None) -> SuccessResponse:
+    async def replace_password(self, body: PasswordInput | PasswordCredentials | None = None, *, options: RequestOptions | None = None) -> SuccessResponse:
         return await self.put_password(body=body, options=options)
 
     async def _simple_password_change(
         self,
         method: str,
-        body: Mapping[str, Any] | PasswordInput | None = None,
+        body: PasswordInput | PasswordCredentials | None = None,
         *,
         options: RequestOptions | None = None,
     ) -> SuccessResponse:
@@ -1138,7 +1142,7 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
             ),
         )
 
-    async def create_inbox(self, payload: InboxCreate | Mapping[str, Any], *, options: RequestOptions | None = None) -> Inbox:
+    async def create_inbox(self, payload: InboxCreate, *, options: RequestOptions | None = None) -> Inbox:
         return cast(Inbox, await self.request("POST", "/api/v1/inboxes", json_data=payload, options=options))
 
     async def get_inbox(self, inbox_id: str, *, cursor: str | None = None, labels: str | None = None, options: RequestOptions | None = None) -> InboxEmails:
@@ -1164,16 +1168,16 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
     async def list_drafts(self, *, options: RequestOptions | None = None) -> DraftCollection:
         return cast(DraftCollection, await self.request("GET", "/api/v1/drafts", options=options))
 
-    async def create_draft(self, payload: DraftInput | Mapping[str, Any], *, options: RequestOptions | None = None) -> Draft:
+    async def create_draft(self, payload: DraftInput, *, options: RequestOptions | None = None) -> Draft:
         return cast(Draft, await self.request("POST", "/api/v1/drafts", json_data=payload, options=options))
 
     async def get_draft(self, draft_id: str, *, options: RequestOptions | None = None) -> Draft:
         return cast(Draft, await self.request("GET", f"/api/v1/drafts/{draft_id}", options=options))
 
-    async def update_draft(self, draft_id: str, payload: DraftInput | Mapping[str, Any], *, options: RequestOptions | None = None) -> Draft:
+    async def update_draft(self, draft_id: str, payload: DraftInput, *, options: RequestOptions | None = None) -> Draft:
         return cast(Draft, await self.request("PATCH", f"/api/v1/drafts/{draft_id}", json_data=payload, options=options))
 
-    async def replace_draft(self, draft_id: str, payload: DraftInput | Mapping[str, Any], *, options: RequestOptions | None = None) -> Draft:
+    async def replace_draft(self, draft_id: str, payload: DraftInput, *, options: RequestOptions | None = None) -> Draft:
         return cast(Draft, await self.request("PUT", f"/api/v1/drafts/{draft_id}", json_data=payload, options=options))
 
     async def delete_draft(self, draft_id: str, *, options: RequestOptions | None = None) -> None:
@@ -1191,19 +1195,19 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
             await self.request("GET", "/api/v1/emails", query={"inbox": inbox, "cursor": cursor}, options=options),
         )
 
-    async def create_email(self, payload: EmailSendInput | Mapping[str, Any], *, options: RequestOptions | None = None) -> EmailSendResponse:
+    async def create_email(self, payload: EmailSendInput, *, options: RequestOptions | None = None) -> EmailSendResponse:
         return cast(EmailSendResponse, await self.request("POST", "/api/v1/emails", json_data=payload, options=options))
 
-    async def patch_email(self, email_id: str, payload: EmailLabelPatch | Mapping[str, Any], *, options: RequestOptions | None = None) -> Email:
+    async def patch_email(self, email_id: str, payload: EmailLabelPatch, *, options: RequestOptions | None = None) -> Email:
         return cast(Email, await self.request("PATCH", f"/api/v1/emails/{email_id}", json_data=payload, options=options))
 
-    async def put_email(self, email_id: str, payload: EmailLabelPatch | Mapping[str, Any], *, options: RequestOptions | None = None) -> Email:
+    async def put_email(self, email_id: str, payload: EmailLabelPatch, *, options: RequestOptions | None = None) -> Email:
         return cast(Email, await self.request("PUT", f"/api/v1/emails/{email_id}", json_data=payload, options=options))
 
     async def apply_email_actions(
         self,
         email_id: str,
-        action: EmailActionInput | EmailLabelPatch | Mapping[str, Any],
+        action: EmailActionInput | EmailLabelPatch,
         *,
         options: RequestOptions | None = None,
     ) -> Email:
@@ -1212,19 +1216,19 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
             await self.request("PATCH", f"/api/v1/emails/{email_id}/actions", json_data=action, options=options),
         )
 
-    async def reply_email(self, email_id: str, payload: Mapping[str, Any] | EmailSendInput, *, options: RequestOptions | None = None) -> SendResult:
+    async def reply_email(self, email_id: str, payload: EmailSendInput, *, options: RequestOptions | None = None) -> SendResult:
         return cast(
             SendResult,
             await self.request("POST", f"/api/v1/emails/{email_id}/reply", json_data=payload, options=options),
         )
 
-    async def forward_email(self, email_id: str, payload: Mapping[str, Any] | EmailSendInput, *, options: RequestOptions | None = None) -> SendResult:
+    async def forward_email(self, email_id: str, payload: EmailSendInput, *, options: RequestOptions | None = None) -> SendResult:
         return cast(
             SendResult,
             await self.request("POST", f"/api/v1/emails/{email_id}/forward", json_data=payload, options=options),
         )
 
-    async def send_email(self, payload: Mapping[str, Any] | EmailSendInput, *, options: RequestOptions | None = None) -> SendResult:
+    async def send_email(self, payload: EmailSendInput, *, options: RequestOptions | None = None) -> SendResult:
         return cast(SendResult, await self.request("POST", "/api/v1/emails/send", json_data=payload, options=options))
 
     async def search_emails(self, q: str, *, options: RequestOptions | None = None) -> EmailList:
@@ -1236,7 +1240,7 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
     async def list_mailbox_labels(self, *, options: RequestOptions | None = None) -> MailboxLabelList:
         return cast(MailboxLabelList, await self.request("GET", "/api/v1/mailbox_labels", options=options))
 
-    async def create_mailbox_label(self, payload: MailboxLabelInput | Mapping[str, Any], *, options: RequestOptions | None = None) -> MailboxLabel:
+    async def create_mailbox_label(self, payload: MailboxLabelInput, *, options: RequestOptions | None = None) -> MailboxLabel:
         return cast(
             MailboxLabel,
             await self.request("POST", "/api/v1/mailbox_labels", json_data=payload, options=options),
@@ -1245,7 +1249,7 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
     async def update_mailbox_label(
         self,
         mailbox_label_id: str,
-        payload: MailboxLabelInput | Mapping[str, Any],
+        payload: MailboxLabelInput,
         *,
         options: RequestOptions | None = None,
     ) -> MailboxLabel:
@@ -1257,7 +1261,7 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
     async def replace_mailbox_label(
         self,
         mailbox_label_id: str,
-        payload: MailboxLabelInput | Mapping[str, Any],
+        payload: MailboxLabelInput,
         *,
         options: RequestOptions | None = None,
     ) -> MailboxLabel:
@@ -1269,13 +1273,13 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
     async def delete_mailbox_label(self, mailbox_label_id: str, *, options: RequestOptions | None = None) -> None:
         return cast(None, await self.request("DELETE", f"/api/v1/mailbox_labels/{mailbox_label_id}", options=options))
 
-    async def create_notification_token(self, payload: Mapping[str, Any], *, options: RequestOptions | None = None) -> dict[str, Any]:
-        return cast(dict[str, Any], await self.request("POST", "/api/v1/notification_tokens", json_data=payload, options=options))
+    async def create_notification_token(self, payload: NotificationTokenInput, *, options: RequestOptions | None = None) -> SuccessResponse:
+        return cast(SuccessResponse, await self.request("POST", "/api/v1/notification_tokens", json_data=payload, options=options))
 
     async def list_custom_domains(self, *, options: RequestOptions | None = None) -> list[CustomDomain]:
         return cast(list[CustomDomain], await self.request("GET", "/api/v1/custom_domains", options=options))
 
-    async def create_custom_domain(self, payload: CustomDomainInput | Mapping[str, Any], *, options: RequestOptions | None = None) -> CustomDomain:
+    async def create_custom_domain(self, payload: CustomDomainInput | CustomDomainPayload, *, options: RequestOptions | None = None) -> CustomDomain:
         payload = _coerce_wrapper_payload(payload, "custom_domain")
         return cast(
             CustomDomain,
@@ -1288,14 +1292,14 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
             await self.request("GET", f"/api/v1/custom_domains/{domain_id}", options=options),
         )
 
-    async def update_custom_domain(self, domain_id: str, payload: CustomDomainInput | Mapping[str, Any], *, options: RequestOptions | None = None) -> CustomDomain:
+    async def update_custom_domain(self, domain_id: str, payload: CustomDomainInput | CustomDomainPayload, *, options: RequestOptions | None = None) -> CustomDomain:
         payload = _coerce_wrapper_payload(payload, "custom_domain")
         return cast(
             CustomDomain,
             await self.request("PATCH", f"/api/v1/custom_domains/{domain_id}", json_data=payload, options=options),
         )
 
-    async def replace_custom_domain(self, domain_id: str, payload: CustomDomainInput | Mapping[str, Any], *, options: RequestOptions | None = None) -> CustomDomain:
+    async def replace_custom_domain(self, domain_id: str, payload: CustomDomainInput | CustomDomainPayload, *, options: RequestOptions | None = None) -> CustomDomain:
         payload = _coerce_wrapper_payload(payload, "custom_domain")
         return cast(
             CustomDomain,
@@ -1305,15 +1309,15 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
     async def delete_custom_domain(self, domain_id: str, *, options: RequestOptions | None = None) -> None:
         return cast(None, await self.request("DELETE", f"/api/v1/custom_domains/{domain_id}", options=options))
 
-    async def verify_custom_domain(self, domain_id: str, *, options: RequestOptions | None = None) -> dict[str, Any]:
-        return cast(dict[str, Any], await self.request("POST", f"/api/v1/custom_domains/{domain_id}/verify", options=options))
+    async def verify_custom_domain(self, domain_id: str, *, options: RequestOptions | None = None) -> CustomDomain:
+        return cast(CustomDomain, await self.request("POST", f"/api/v1/custom_domains/{domain_id}/verify", options=options))
 
     async def list_webhook_subscriptions(self, *, options: RequestOptions | None = None) -> list[WebhookSubscription]:
         return cast(list[WebhookSubscription], await self.request("GET", "/api/v1/webhook_subscriptions", options=options))
 
     async def create_webhook_subscription(
         self,
-        payload: WebhookSubscriptionInput | Mapping[str, Any],
+        payload: WebhookSubscriptionInput | WebhookSubscriptionPayload,
         *,
         options: RequestOptions | None = None,
     ) -> WebhookSubscription:
@@ -1337,7 +1341,7 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
     async def update_webhook_subscription(
         self,
         webhook_id: str,
-        payload: WebhookSubscriptionInput | Mapping[str, Any],
+        payload: WebhookSubscriptionInput | WebhookSubscriptionPayload,
         *,
         options: RequestOptions | None = None,
     ) -> WebhookSubscription:
@@ -1355,7 +1359,7 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
     async def replace_webhook_subscription(
         self,
         webhook_id: str,
-        payload: WebhookSubscriptionInput | Mapping[str, Any],
+        payload: WebhookSubscriptionInput | WebhookSubscriptionPayload,
         *,
         options: RequestOptions | None = None,
     ) -> WebhookSubscription:
@@ -1406,7 +1410,7 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
             ),
         )
 
-    async def create_inbox_draft(self, inbox_id: str, payload: DraftInput | Mapping[str, Any], *, options: RequestOptions | None = None) -> Draft:
+    async def create_inbox_draft(self, inbox_id: str, payload: DraftInput, *, options: RequestOptions | None = None) -> Draft:
         return cast(
             Draft,
             await self.request(
@@ -1427,7 +1431,7 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
         self,
         inbox_id: str,
         draft_id: str,
-        payload: DraftInput | Mapping[str, Any],
+        payload: DraftInput,
         *,
         options: RequestOptions | None = None,
     ) -> Draft:
@@ -1445,7 +1449,7 @@ class AsyncInboxLayerClient(_BaseInboxLayerClient):
         self,
         inbox_id: str,
         draft_id: str,
-        payload: DraftInput | Mapping[str, Any],
+        payload: DraftInput,
         *,
         options: RequestOptions | None = None,
     ) -> Draft:

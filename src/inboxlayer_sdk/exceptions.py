@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
+from typing import Mapping
 
 
 class InboxLayerError(Exception):
@@ -14,7 +14,7 @@ class InboxLayerError(Exception):
         *,
         status_code: int | None = None,
         error_code: str | None = None,
-        body: Any | None = None,
+        body: object = None,
         headers: Mapping[str, str] | None = None,
         request_id: str | None = None,
         retry_after: float | None = None,
