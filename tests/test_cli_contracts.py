@@ -7,7 +7,6 @@ import httpx
 import pytest
 import inboxlayer_sdk.cli as cli
 
-from inboxlayer_sdk import PasswordInput
 from inboxlayer_sdk.client import (
     _coerce_json_payload,
     _coerce_password_payload,
@@ -79,8 +78,8 @@ def test_coerce_password_payload_from_mapping() -> None:
     }
 
 
-def test_coerce_password_payload_from_model() -> None:
-    model = PasswordInput.model_validate(
+def test_coerce_password_payload_from_wrapped_dict() -> None:
+    payload = _coerce_password_payload(
         {
             "user": {
                 "current_password": "old",
@@ -89,8 +88,13 @@ def test_coerce_password_payload_from_model() -> None:
             }
         }
     )
-    payload = _coerce_password_payload(model)
-    assert payload == model.model_dump()
+    assert payload == {
+        "user": {
+            "current_password": "old",
+            "password": "new",
+            "password_confirmation": "new",
+        }
+    }
 
 
 def test_coerce_password_payload_rejects_list() -> None:
@@ -109,17 +113,15 @@ def test_coerce_wrapper_payload_keeps_existing_resource_key() -> None:
     assert _coerce_wrapper_payload(payload, "custom_domain") is payload
 
 
-def test_coerce_json_payload_from_base_model() -> None:
-    payload = PasswordInput.model_validate(
-        {
-            "user": {
-                "current_password": "old",
-                "password": "new",
-                "password_confirmation": "new",
-            }
+def test_coerce_json_payload_from_dict() -> None:
+    payload = {
+        "user": {
+            "current_password": "old",
+            "password": "new",
+            "password_confirmation": "new",
         }
-    )
-    assert _coerce_json_payload(payload) == payload.model_dump()
+    }
+    assert _coerce_json_payload(payload) == payload
 
 
 def test_create_custom_domain_wrapps_flat_payload() -> None:
@@ -141,5 +143,5 @@ def test_create_custom_domain_wrapps_flat_payload() -> None:
     ) as client:
         response = client.create_custom_domain({"domain": "app.example.com"})
 
-    assert response.id == "cd_1"
+    assert response["id"] == "cd_1"
     assert captured["body"] == {"custom_domain": {"domain": "app.example.com"}}

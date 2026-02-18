@@ -82,13 +82,13 @@ def main() -> None:
 
     inbox_id: str | None = None
     inbox_list = run("list_inboxes", lambda: client.list_inboxes(), allowed={401, 403})
-    if inbox_list and hasattr(inbox_list, "data") and inbox_list.data:
-        inbox_id = inbox_list.data[0].id
+    if inbox_list and isinstance(inbox_list, dict) and inbox_list.get("data"):
+        inbox_id = inbox_list["data"][0]["id"]
 
     created_inbox_id: str | None = None
     inbox = run("create_inbox", lambda: client.create_inbox({"name": "sdk-test-inbox"}), allowed={401, 403, 422})
-    if inbox and hasattr(inbox, "id"):
-        created_inbox_id = inbox.id
+    if inbox and isinstance(inbox, dict) and "id" in inbox:
+        created_inbox_id = inbox["id"]
 
     target_inbox = created_inbox_id or inbox_id
     if target_inbox:
@@ -109,7 +109,7 @@ def main() -> None:
             lambda: client.create_inbox_draft(target_inbox, {"to": "test@example.com", "subject": "SDK Test", "text_body": "Hello from SDK test"}),
             allowed={401, 403, 404, 422},
         )
-        inbox_draft_id = inbox_draft.id if inbox_draft and hasattr(inbox_draft, "id") else None
+        inbox_draft_id = inbox_draft.get("id") if inbox_draft and isinstance(inbox_draft, dict) else None
 
         if inbox_draft_id:
             run("get_inbox_draft", lambda: client.get_inbox_draft(target_inbox, inbox_draft_id), allowed={401, 403, 404})
@@ -135,7 +135,7 @@ def main() -> None:
         lambda: client.create_draft({"to": "test@example.com", "subject": "Global Draft", "text_body": "test body", "inbox_id": target_inbox}),
         allowed={401, 403, 422},
     )
-    global_draft_id = global_draft.id if global_draft and hasattr(global_draft, "id") else None
+    global_draft_id = global_draft.get("id") if global_draft and isinstance(global_draft, dict) else None
 
     if global_draft_id:
         run("get_draft", lambda: client.get_draft(global_draft_id), allowed={401, 403, 404})
@@ -152,10 +152,10 @@ def main() -> None:
 
     email_id: str | None = None
     email_list = run("list_emails", lambda: client.list_emails(inbox=target_inbox), allowed={401, 403, 422})
-    if email_list:
-        emails = getattr(email_list, "emails", []) or getattr(email_list, "data", [])
+    if email_list and isinstance(email_list, dict):
+        emails = email_list.get("emails", []) or email_list.get("data", [])
         if emails:
-            email_id = emails[0].id
+            email_id = emails[0]["id"]
 
     run("create_email", lambda: client.create_email({"to": "test@example.com", "subject": "SDK create_email", "text_body": "test"}), allowed={401, 403, 422})
     run("send_email", lambda: client.send_email({"to": "test@example.com", "subject": "SDK send_email", "text_body": "test"}), allowed={401, 403, 422})
@@ -181,7 +181,7 @@ def main() -> None:
         lambda: client.create_mailbox_label({"name": "sdk-test-label", "color": "#ff0000"}),
         allowed={401, 403, 422},
     )
-    label_id = label.id if label and hasattr(label, "id") else None
+    label_id = label.get("id") if label and isinstance(label, dict) else None
 
     if label_id:
         run("update_mailbox_label", lambda: client.update_mailbox_label(label_id, {"name": "sdk-test-updated"}), allowed={401, 403, 404, 422})
@@ -197,14 +197,14 @@ def main() -> None:
     domain_id: str | None = None
     domains = run("list_custom_domains", lambda: client.list_custom_domains(), allowed={401, 403})
     if domains and isinstance(domains, list) and domains:
-        domain_id = domains[0].id
+        domain_id = domains[0]["id"]
 
     created_domain = run(
         "create_custom_domain",
         lambda: client.create_custom_domain({"domain": "sdk-test.example.com"}),
         allowed={401, 403, 422},
     )
-    created_domain_id = created_domain.id if created_domain and hasattr(created_domain, "id") else None
+    created_domain_id = created_domain.get("id") if created_domain and isinstance(created_domain, dict) else None
 
     target_domain = created_domain_id or domain_id
     if target_domain:
@@ -227,7 +227,7 @@ def main() -> None:
     webhook_id: str | None = None
     webhooks = run("list_webhook_subscriptions", lambda: client.list_webhook_subscriptions(), allowed={401, 403})
     if webhooks and isinstance(webhooks, list) and webhooks:
-        webhook_id = webhooks[0].id
+        webhook_id = webhooks[0]["id"]
 
     created_wh = run(
         "create_webhook_subscription",
@@ -238,7 +238,7 @@ def main() -> None:
         }),
         allowed={401, 403, 422},
     )
-    created_webhook_id = created_wh.id if created_wh and hasattr(created_wh, "id") else None
+    created_webhook_id = created_wh.get("id") if created_wh and isinstance(created_wh, dict) else None
 
     target_webhook = created_webhook_id or webhook_id
     if target_webhook:
@@ -265,8 +265,8 @@ def main() -> None:
 
     thread_id: str | None = None
     threads = run("list_threads", lambda: client.list_threads(), allowed={401, 403, 500})
-    if threads and hasattr(threads, "data") and threads.data:
-        thread_id = threads.data[0].id
+    if threads and isinstance(threads, dict) and threads.get("data"):
+        thread_id = threads["data"][0]["id"]
 
     if thread_id:
         run("get_email_thread", lambda: client.get_email_thread(thread_id), allowed={401, 403, 404})

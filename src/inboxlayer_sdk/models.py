@@ -2,259 +2,218 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Mapping
-
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing import Any, NotRequired, TypedDict
 
 
-class InboxLayerModel(BaseModel):
-    model_config = ConfigDict(extra="ignore", coerce_numbers_to_str=True)
+# ── Response types ────────────────────────────────────────────
 
-
-class ErrorResponse(InboxLayerModel):
-    error: str | None = None
-    error_code: str | None = None
-
-
-class SuccessResponse(InboxLayerModel):
-    success: bool | None = None
-
-
-class Account(InboxLayerModel):
-    id: int | None = None
-    name: str | None = None
-
-
-class User(InboxLayerModel):
-    id: int | None = None
-    email: str | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-
-
-class AuthResponse(InboxLayerModel):
+class AuthResponse(TypedDict):
     token: str
-    name: str | None = None
-    expires_at: datetime | None = None
+    name: NotRequired[str]
+    expires_at: NotRequired[str | None]
 
 
-class Inbox(InboxLayerModel):
-    id: str
+class User(TypedDict):
+    id: NotRequired[int]
+    email: NotRequired[str]
+    first_name: NotRequired[str]
+    last_name: NotRequired[str]
+
+
+class Account(TypedDict):
+    id: NotRequired[int]
+    name: NotRequired[str]
+
+
+class Inbox(TypedDict):
+    id: NotRequired[str]
+    name: NotRequired[str]
+    email_address: NotRequired[str]
+    is_disabled: NotRequired[bool]
+    api_created: NotRequired[bool]
+
+
+class Email(TypedDict):
+    id: NotRequired[str]
+    from_address: NotRequired[str]
+    to_address: NotRequired[str]
+    subject: NotRequired[str]
+    labels: NotRequired[list[str]]
+    created_at: NotRequired[str]
+    updated_at: NotRequired[str]
+
+
+class Draft(TypedDict):
+    id: NotRequired[str]
+    inbox_id: NotRequired[str]
+    subject: NotRequired[str]
+    to: NotRequired[list[str]]
+    to_address: NotRequired[str]
+    status: NotRequired[str]
+
+
+class SendResult(TypedDict):
+    id: NotRequired[str]
+    message_id: NotRequired[str]
+    status: NotRequired[str]
+    provider_message_id: NotRequired[str]
+
+
+class MailboxLabel(TypedDict):
+    id: NotRequired[str]
+    name: NotRequired[str]
+    slug: NotRequired[str]
+    color: NotRequired[str]
+    system: NotRequired[bool]
+
+
+class CustomDomain(TypedDict):
+    id: NotRequired[str]
+    domain: NotRequired[str]
+    verified_status: NotRequired[str]
+    dkim_host: NotRequired[str]
+    dkim_value: NotRequired[str]
+
+
+class WebhookSubscription(TypedDict):
+    id: NotRequired[str]
+    url: NotRequired[str]
+    events: NotRequired[list[str]]
+    active: NotRequired[bool]
+    created_at: NotRequired[str]
+
+
+class EmailThread(TypedDict):
+    id: NotRequired[str]
+    thread_id: NotRequired[str]
+    subject: NotRequired[str]
+    participants: NotRequired[list[str]]
+    email_count: NotRequired[int]
+
+
+class WarmupStatus(TypedDict):
+    inbox_id: NotRequired[int]
+    warmup_started_at: NotRequired[str | None]
+
+
+class ErrorResponse(TypedDict):
+    error: NotRequired[str]
+    error_code: NotRequired[str]
+
+
+class SuccessResponse(TypedDict):
+    success: NotRequired[bool]
+
+
+# ── Collection / list wrappers ────────────────────────────────
+
+class InboxList(TypedDict):
+    data: NotRequired[list[Inbox]]
+
+
+class InboxEmails(TypedDict):
+    id: NotRequired[str]
+    name: NotRequired[str]
+    emails: NotRequired[list[Email]]
+    data: NotRequired[list[Email]]
+
+
+class EmailList(TypedDict):
+    emails: NotRequired[list[Email]]
+    data: NotRequired[list[Email]]
+    meta: NotRequired[dict[str, Any]]
+
+
+class DraftCollection(TypedDict):
+    count: NotRequired[int]
+    drafts: NotRequired[list[Draft]]
+    data: NotRequired[list[Draft]]
+
+
+class MailboxLabelList(TypedDict):
+    data: NotRequired[list[MailboxLabel]]
+
+
+class EmailThreadList(TypedDict):
+    data: NotRequired[list[EmailThread]]
+    meta: NotRequired[dict[str, Any]]
+
+
+class EmailSendResponse(TypedDict):
+    message: NotRequired[str]
+    job: NotRequired[str]
+
+
+# ── Input types ───────────────────────────────────────────────
+
+class InboxCreate(TypedDict, total=False):
     name: str
-    email_address: str
-    is_disabled: bool = False
-    api_created: bool = False
+    custom_domain_id: str
 
 
-class InboxCreate(InboxLayerModel):
-    name: str
-    custom_domain_id: str | None = None
-
-
-class Email(InboxLayerModel):
-    id: str | None = None
-    from_address: str | None = None
-    to_address: str | None = None
-    subject: str | None = None
-    labels: list[str] = Field(default_factory=list)
-    created_at: str | None = None
-    updated_at: str | None = None
-
-
-class EmailList(InboxLayerModel):
-    emails: list[Email] = Field(default_factory=list)
-    data: list[Email] = Field(default_factory=list)
-    meta: dict[str, Any] | None = None
-
-
-class EmailSendInput(InboxLayerModel):
+class DraftInput(TypedDict, total=False):
     to: str | list[str]
-    subject: str | None = None
-    text_body: str | None = None
-    html_body: str | None = None
-    inbox_id: str | None = None
-    message_type: str | None = None
+    subject: str
+    text_body: str
+    html_body: str
 
 
-class SendResult(InboxLayerModel):
-    id: str | None = None
-    message_id: str | None = None
-    status: str | None = None
-    provider_message_id: str | None = None
+class EmailSendInput(TypedDict, total=False):
+    to: str | list[str]
+    subject: str
+    text_body: str
+    html_body: str
+    inbox_id: str
+    message_type: str
 
 
-class EmailSendResponse(InboxLayerModel):
-    message: str | None = None
-    job: str | None = None
+class EmailLabelPatch(TypedDict, total=False):
+    add_labels: list[str]
+    remove_labels: list[str]
+    labels: list[str]
 
 
-class EmailActionInput(InboxLayerModel):
-    add_labels: list[str] | None = None
-    remove_labels: list[str] | None = None
-    labels: list[str] | None = None
-    mark_read: bool | None = None
-    move_to: str | None = None
+class EmailActionInput(TypedDict, total=False):
+    add_labels: list[str]
+    remove_labels: list[str]
+    labels: list[str]
+    mark_read: bool
+    move_to: str
 
 
-class EmailLabelPatch(InboxLayerModel):
-    add_labels: list[str] | None = None
-    remove_labels: list[str] | None = None
-    labels: list[str] | None = None
+class MailboxLabelInput(TypedDict, total=False):
+    name: str
+    slug: str
+    color: str
 
 
-class Draft(InboxLayerModel):
-    id: str | None = None
-    inbox_id: str | None = None
-    subject: str | None = None
-    to: list[str] | str | None = None
-    to_address: str | None = None
-    status: str | None = None
+class CustomDomainPayload(TypedDict, total=False):
+    domain: str
+    dkim_host: str
+    dkim_value: str
+    spf_host: str
+    spf_value: str
 
 
-class DraftCollection(InboxLayerModel):
-    count: int | None = None
-    drafts: list[Draft] = Field(default_factory=list)
-    data: list[Draft] = Field(default_factory=list)
-
-
-class DraftInput(InboxLayerModel):
-    to: str | list[str] | None = None
-    subject: str | None = None
-    text_body: str | None = None
-    html_body: str | None = None
-
-
-class MailboxLabel(InboxLayerModel):
-    id: str | None = None
-    name: str | None = None
-    slug: str | None = None
-    color: str | None = None
-    system: bool | None = None
-
-
-class MailboxLabelList(InboxLayerModel):
-    data: list[MailboxLabel] = Field(default_factory=list)
-
-
-class MailboxLabelInput(InboxLayerModel):
-    name: str | None = None
-    slug: str | None = None
-    color: str | None = None
-
-
-class CustomDomain(InboxLayerModel):
-    id: str | None = None
-    domain: str | None = None
-    verified_status: str | None = None
-    dkim_host: str | None = None
-    dkim_value: str | None = None
-
-
-class CustomDomainInput(InboxLayerModel):
-    class CustomDomainPayload(InboxLayerModel):
-        domain: str
-        dkim_host: str | None = None
-        dkim_value: str | None = None
-        spf_host: str | None = None
-        spf_value: str | None = None
-
+class CustomDomainInput(TypedDict):
     custom_domain: CustomDomainPayload
 
-    @model_validator(mode="before")
-    @classmethod
-    def _coerce_custom_domain(cls, value: Any) -> Any:
-        if isinstance(value, Mapping):
-            if "custom_domain" in value:
-                return value
-            if {"domain", "dkim_host", "dkim_value", "spf_host", "spf_value"} & value.keys():
-                return {"custom_domain": value}
-        return value
+
+class WebhookSubscriptionPayload(TypedDict, total=False):
+    url: str
+    active: bool
+    events: list[str]
 
 
-class PasswordCredentials(InboxLayerModel):
+class WebhookSubscriptionInput(TypedDict):
+    webhook_subscription: WebhookSubscriptionPayload
+
+
+class PasswordCredentials(TypedDict):
     current_password: str
     password: str
     password_confirmation: str
 
 
-class PasswordInput(InboxLayerModel):
-    """Payload for PATCH / PUT /api/v1/password."""
-
+class PasswordInput(TypedDict):
     user: PasswordCredentials
-
-    @model_validator(mode="before")
-    @classmethod
-    def _coerce_user(cls, value: Any) -> Any:
-        if isinstance(value, Mapping):
-            if "user" in value:
-                return value
-            if {
-                "current_password",
-                "password",
-                "password_confirmation",
-            } <= value.keys():
-                return {
-                    "user": {
-                        "current_password": value.get("current_password"),
-                        "password": value.get("password"),
-                        "password_confirmation": value.get("password_confirmation"),
-                    }
-                }
-        return value
-
-
-class WebhookSubscription(InboxLayerModel):
-    id: str | None = None
-    url: str | None = None
-    events: list[str] = Field(default_factory=list)
-    active: bool | None = None
-    created_at: str | None = None
-
-
-class WebhookSubscriptionInput(InboxLayerModel):
-    class WebhookSubscriptionPayload(InboxLayerModel):
-        url: str | None = None
-        active: bool | None = None
-        events: list[str] = Field(default_factory=list)
-
-    webhook_subscription: WebhookSubscriptionPayload
-
-    @model_validator(mode="before")
-    @classmethod
-    def _coerce_webhook_subscription(cls, value: Any) -> Any:
-        if isinstance(value, Mapping):
-            if "webhook_subscription" in value:
-                return value
-            if {"url", "active", "events"} & value.keys():
-                return {"webhook_subscription": value}
-        return value
-
-
-class InboxList(InboxLayerModel):
-    data: list[Inbox] = Field(default_factory=list)
-
-
-class InboxEmails(InboxLayerModel):
-    id: str | None = None
-    name: str | None = None
-    emails: list[Email] = Field(default_factory=list)
-    data: list[Email] = Field(default_factory=list)
-
-
-class WarmupStatus(InboxLayerModel):
-    inbox_id: int | None = None
-    warmup_started_at: datetime | None = None
-
-
-class EmailThread(InboxLayerModel):
-    id: str | None = None
-    thread_id: str | None = None
-    subject: str | None = None
-    participants: list[str] = Field(default_factory=list)
-    email_count: int | None = None
-
-
-class EmailThreadList(InboxLayerModel):
-    data: list[EmailThread] = Field(default_factory=list)
-    meta: dict[str, Any] | None = None
