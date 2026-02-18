@@ -1,184 +1,226 @@
 # Inbox Layer Python SDK
 
-This package provides both synchronous and asynchronous clients for the Inbox Layer API.
+[![pypi](https://img.shields.io/pypi/v/inboxlayer-sdk)](https://pypi.python.org/pypi/inboxlayer-sdk)
 
-## Install
+The Inbox Layer Python SDK provides convenient access to the [Inbox Layer](https://inboxlayer.dev) API from Python.
 
-```bash
-pip install inboxlayer-python-sdk
+## Table of Contents
+
+- [Installation](#installation)
+- [Usage](#usage)
+- [Async Client](#async-client)
+- [Streaming](#streaming)
+- [Exception Handling](#exception-handling)
+- [Webhook Verification](#webhook-verification)
+- [Advanced](#advanced)
+  - [Request Options](#request-options)
+  - [Retries](#retries)
+  - [Timeouts](#timeouts)
+  - [Custom HTTP Client](#custom-http-client)
+- [Reference](#reference)
+
+## Installation
+
+Requires Python 3.10+.
+
+```sh
+pip install inboxlayer-sdk
 ```
 
-## Quick start
+## Usage
 
 ```python
 from inboxlayer_sdk import InboxLayerClient
 
-client = InboxLayerClient(api_token="...")  # sync
+client = InboxLayerClient(api_token="YOUR_API_TOKEN")
 
-me = client.get_me()
-accounts = client.list_accounts()
+# List inboxes
+inboxes = client.list_inboxes()
+for inbox in inboxes["data"]:
+    print(inbox["email_address"])
+
+# Send an email
+client.send_email({
+    "to": "recipient@example.com",
+    "subject": "Hello",
+    "text_body": "Sent from Inbox Layer",
+})
 ```
+
+All responses are plain dicts typed with `TypedDict`, so use bracket access:
+
+```python
+me = client.get_me()
+print(me["email"])
+```
+
+The API token can also be set via the `INBOX_LAYER_API_TOKEN` environment variable:
+
+```python
+# Reads token from INBOX_LAYER_API_TOKEN
+client = InboxLayerClient()
+```
+
+## Async Client
+
+The SDK exports an async client with the same interface:
 
 ```python
 import asyncio
 from inboxlayer_sdk import AsyncInboxLayerClient
 
 async def main() -> None:
-    async with AsyncInboxLayerClient(api_token="...") as client:
+    async with AsyncInboxLayerClient(api_token="YOUR_API_TOKEN") as client:
         inboxes = await client.list_inboxes()
-        async for event in client.stream_inbox_events("inbox_id"):
-            print(event.event, event.data)
+        email = await client.send_email({
+            "to": "recipient@example.com",
+            "subject": "Hello from async",
+            "text_body": "Sent asynchronously",
+        })
 
 asyncio.run(main())
 ```
 
-All responses are plain dicts (typed as `TypedDict`), so use bracket access:
+## Streaming
+
+Listen for real-time inbox events using Server-Sent Events:
 
 ```python
-auth = client.authenticate(email="user@example.com", password="secret")
-print(auth["token"])
+# Sync
+for event in client.stream_inbox_events("inbox_id"):
+    print(event.event, event.json())
 ```
 
-## Client initialization
+```python
+# Async
+async for event in client.stream_inbox_events("inbox_id"):
+    print(event.event, event.json())
+```
 
-- `InboxLayerClient(api_token=None, allow_http=False, ...)` for synchronous calls.
-- `AsyncInboxLayerClient(...)` for asynchronous calls.
-- Default base URL is `https://inboxlayer.dev`.
-- `allow_http=True` is required when calling local servers over `http://`.
-- `authenticate()` can be used without an initial token; it stores the returned token on the client automatically.
+Each `SSEEvent` has `event`, `data`, `id`, and `retry` fields, plus a `.json()` helper to parse `data` as JSON.
+
+## Exception Handling
+
+When the API returns a non-success status code, a typed exception is raised:
 
 ```python
+from inboxlayer_sdk import InboxLayerClient, InboxLayerHTTPError, InboxLayerAuthError
+
+client = InboxLayerClient(api_token="YOUR_API_TOKEN")
+
+try:
+    client.get_me()
+except InboxLayerAuthError as e:
+    print(e.status_code)  # 401 or 403
+    print(e.body)
+except InboxLayerHTTPError as e:
+    print(e.status_code)
+    print(e.body)
+```
+
+**Exception hierarchy:**
+
+| Exception | When |
+|---|---|
+| `InboxLayerError` | Base for all SDK errors |
+| `InboxLayerHTTPError` | Any non-2xx response |
+| `InboxLayerAuthError` | 401/403 authentication failures |
+| `InboxLayerRateLimitError` | 429 rate limit exceeded |
+| `InboxLayerValidationError` | Request/response validation failures |
+| `InboxLayerTimeoutError` | Request timed out |
+| `InboxLayerNetworkError` | DNS/TCP transport errors |
+
+All HTTP exceptions expose `status_code`, `body`, `headers`, `error_code`, `request_id`, and `retry_after`.
+
+## Webhook Verification
+
+Verify incoming webhook signatures:
+
+```python
+from inboxlayer_sdk.security import verify_webhook_signature
+
+is_valid = verify_webhook_signature(
+    payload=request.body,
+    signature=request.headers["X-Signature"],
+    secret="your_webhook_secret",
+)
+```
+
+## Advanced
+
+### Request Options
+
+Every method accepts an optional `options` parameter to override client defaults per-request:
+
+```python
+from inboxlayer_sdk import RequestOptions
+
+client.list_inboxes(options=RequestOptions(
+    timeout=60.0,
+    max_retries=5,
+    headers={"X-Custom": "value"},
+    idempotency_key="unique-key",
+))
+```
+
+### Retries
+
+Requests are automatically retried with exponential backoff. A request is retried when any of these status codes is returned:
+
+- 408 (Timeout)
+- 429 (Too Many Requests)
+- 5xx (Server Errors)
+
+The default is 3 retries. Override per-client or per-request:
+
+```python
+# Per-client
+client = InboxLayerClient(api_token="...", max_retries=5)
+
+# Per-request
+client.list_inboxes(options=RequestOptions(max_retries=1))
+```
+
+Rate-limited responses with a `Retry-After` header are respected automatically.
+
+### Timeouts
+
+The default timeout is 30 seconds. Override per-client or per-request:
+
+```python
+client = InboxLayerClient(api_token="...", timeout=60.0)
+
+# Per-request
+client.list_inboxes(options=RequestOptions(timeout=10.0))
+```
+
+### Custom HTTP Client
+
+Pass a custom `httpx` client for proxies, transports, or other configuration:
+
+```python
+import httpx
 from inboxlayer_sdk import InboxLayerClient
 
-client = InboxLayerClient(base_url="http://localhost:3033", allow_http=True)
+client = InboxLayerClient(
+    api_token="...",
+    httpx_client=httpx.Client(
+        proxy="http://my.proxy.example.com",
+        transport=httpx.HTTPTransport(local_address="0.0.0.0"),
+    ),
+)
+```
+
+For local development over HTTP:
+
+```python
+client = InboxLayerClient(
+    base_url="http://localhost:3033",
+    allow_http=True,
+)
 auth = client.authenticate(email="user@example.com", password="secret")
-print(auth["token"])
 ```
 
-`post_auth` is a convenience alias for `authenticate`.
+## Reference
 
-## CLI
-
-```bash
-inboxlayer-check-contract
-```
-
-Validates the shipped endpoint map against the embedded OpenAPI document.
-
-## All public methods (both clients)
-
-Both `InboxLayerClient` and `AsyncInboxLayerClient` expose the same public methods.
-
-### Auth
-
-- `authenticate(email, password, *, options) -> AuthResponse`
-- `post_auth(email, password, *, options) -> AuthResponse`
-- `delete_auth(*, options) -> SuccessResponse`
-- `logout(*, options) -> SuccessResponse`
-
-### Account and session context
-
-- `get_me(*, options) -> User`
-
-### Password
-
-- `patch_password(body: PasswordInput | PasswordCredentials | None, *, options) -> SuccessResponse`
-- `put_password(body: PasswordInput | PasswordCredentials | None, *, options) -> SuccessResponse`
-- `replace_password(body: PasswordInput | PasswordCredentials | None, *, options) -> SuccessResponse`
-
-### Accounts
-
-- `list_accounts(*, options) -> list[Account]`
-
-### Inboxes
-
-- `list_inboxes(*, cursor, per_page, options) -> InboxList`
-- `create_inbox(payload: InboxCreate, *, options) -> Inbox`
-- `get_inbox(inbox_id, *, cursor, labels, options) -> InboxEmails`
-- `delete_inbox(inbox_id, *, options) -> None`
-- `warmup_inbox(inbox_id, *, options) -> WarmupStatus`
-- `stream_inbox_events(inbox_id, *, timeout, since, options) -> Iterator[SSEEvent] | AsyncIterator[SSEEvent]`
-
-### Drafts
-
-- `list_inbox_drafts(inbox_id, *, options) -> DraftCollection`
-- `create_inbox_draft(inbox_id, payload: DraftInput, *, options) -> Draft`
-- `get_inbox_draft(inbox_id, draft_id, *, options) -> Draft`
-- `update_inbox_draft(inbox_id, draft_id, payload: DraftInput, *, options) -> Draft`
-- `replace_inbox_draft(inbox_id, draft_id, payload: DraftInput, *, options) -> Draft`
-- `delete_inbox_draft(inbox_id, draft_id, *, options) -> None`
-- `send_inbox_draft(inbox_id, draft_id, *, options) -> SendResult`
-- `list_drafts(*, options) -> DraftCollection`
-- `create_draft(payload: DraftInput, *, options) -> Draft`
-- `get_draft(draft_id, *, options) -> Draft`
-- `update_draft(draft_id, payload: DraftInput, *, options) -> Draft`
-- `replace_draft(draft_id, payload: DraftInput, *, options) -> Draft`
-- `delete_draft(draft_id, *, options) -> None`
-- `send_draft(draft_id, *, options) -> SendResult`
-
-### Emails
-
-- `list_emails(*, inbox, cursor, options) -> EmailList`
-- `create_email(payload: EmailSendInput, *, options) -> EmailSendResponse`
-- `patch_email(email_id, payload: EmailLabelPatch, *, options) -> Email`
-- `put_email(email_id, payload: EmailLabelPatch, *, options) -> Email`
-- `apply_email_actions(email_id, action: EmailActionInput | EmailLabelPatch, *, options) -> Email`
-- `reply_email(email_id, payload: EmailSendInput, *, options) -> SendResult`
-- `forward_email(email_id, payload: EmailSendInput, *, options) -> SendResult`
-- `send_email(payload: EmailSendInput, *, options) -> SendResult`
-- `search_emails(q, *, options) -> EmailList`
-
-### Mailbox labels
-
-- `list_mailbox_labels(*, options) -> MailboxLabelList`
-- `create_mailbox_label(payload: MailboxLabelInput, *, options) -> MailboxLabel`
-- `update_mailbox_label(mailbox_label_id, payload: MailboxLabelInput, *, options) -> MailboxLabel`
-- `replace_mailbox_label(mailbox_label_id, payload: MailboxLabelInput, *, options) -> MailboxLabel`
-- `delete_mailbox_label(mailbox_label_id, *, options) -> None`
-
-### Utilities and integration
-
-- `create_notification_token(payload: NotificationTokenInput, *, options) -> SuccessResponse`
-
-### Custom domains
-
-- `list_custom_domains(*, options) -> list[CustomDomain]`
-- `create_custom_domain(payload: CustomDomainInput | CustomDomainPayload, *, options) -> CustomDomain`
-- `get_custom_domain(domain_id, *, options) -> CustomDomain`
-- `update_custom_domain(domain_id, payload: CustomDomainInput | CustomDomainPayload, *, options) -> CustomDomain`
-- `replace_custom_domain(domain_id, payload: CustomDomainInput | CustomDomainPayload, *, options) -> CustomDomain`
-- `delete_custom_domain(domain_id, *, options) -> None`
-- `verify_custom_domain(domain_id, *, options) -> CustomDomain`
-
-### Webhooks
-
-- `list_webhook_subscriptions(*, options) -> list[WebhookSubscription]`
-- `create_webhook_subscription(payload: WebhookSubscriptionInput | WebhookSubscriptionPayload, *, options) -> WebhookSubscription`
-- `get_webhook_subscription(webhook_id, *, options) -> WebhookSubscription`
-- `update_webhook_subscription(webhook_id, payload: WebhookSubscriptionInput | WebhookSubscriptionPayload, *, options) -> WebhookSubscription`
-- `replace_webhook_subscription(webhook_id, payload: WebhookSubscriptionInput | WebhookSubscriptionPayload, *, options) -> WebhookSubscription`
-- `delete_webhook_subscription(webhook_id, *, options) -> None`
-- `test_webhook_subscription(webhook_id, *, options) -> SuccessResponse`
-
-### Thread endpoints
-
-- `list_threads(*, options) -> EmailThreadList`
-- `get_email_thread(thread_id, *, options) -> EmailThread`
-
-### Client-level helpers
-
-- `request(...)`: shared low-level request helper
-- `close() -> None`: sync client cleanup
-- `aclose() -> None`: async client cleanup
-- Sync context manager: `__enter__`, `__exit__`, and `with client:`
-- Async context manager: `__aenter__`, `__aexit__`, and `async with client:`
-
-## Error types
-
-- `InboxLayerError`
-- `InboxLayerValidationError`
-- `InboxLayerAuthError`
-- `InboxLayerRateLimitError`
-- `InboxLayerTimeoutError`
-- `InboxLayerNetworkError`
-- `InboxLayerHTTPError`
+A full list of all methods is available in [REFERENCE.md](REFERENCE.md).
