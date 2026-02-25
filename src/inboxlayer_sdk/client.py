@@ -181,7 +181,7 @@ class _BaseInboxLayerClient:
         self.max_retries = max_retries
         self._default_headers = {
             "Accept": "application/json",
-            "User-Agent": "inboxlayer-python-sdk/0.1.0",
+            "User-Agent": "InboxLayer-SDK/0.1.0",
         }
         if self.api_token:
             self._default_headers["Authorization"] = f"Bearer {self.api_token}"
